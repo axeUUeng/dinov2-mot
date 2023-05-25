@@ -11,7 +11,7 @@ class Filter(object):
 		self.info = info        		# other information associated	
 
 class KF(Filter):
-	def __init__(self, bbox3D, info, ID):
+	def __init__(self, bbox3D, info, ID, embedding=None):
 		super().__init__(bbox3D, info, ID)
 
 		self.kf = KalmanFilter(dim_x=10, dim_z=7)       
@@ -53,6 +53,7 @@ class KF(Filter):
 
 		# initialize data
 		self.kf.x[:7] = self.initial_pos.reshape((7, 1))
+		self.embedding = embedding
 
 	def compute_innovation_matrix(self):
 		""" compute the innovation matrix for association with mahalanobis distance

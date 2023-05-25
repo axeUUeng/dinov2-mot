@@ -35,6 +35,7 @@ def main_per_cat(cfg, cat, log, ID_start):
 	# loop every sequence
 	seq_count = 0
 	total_time, total_frames = 0.0, 0
+	video = 0
 	for seq_name in seq_eval:
 		seq_file = os.path.join(det_root, seq_name+'.txt')
 		seq_dets, flag = load_detection(seq_file) 				# load detection
@@ -46,7 +47,7 @@ def main_per_cat(cfg, cat, log, ID_start):
 
 		# initialize tracker
 		tracker, frame_list = initialize(cfg, trk_root, save_dir, subfolder, seq_name, cat, ID_start, hw, log)
-
+		
 		# loop over frame
 		min_frame, max_frame = int(frame_list[0]), int(frame_list[-1])
 		for frame in range(min_frame, max_frame + 1):
@@ -62,7 +63,9 @@ def main_per_cat(cfg, cat, log, ID_start):
 			# tracking by detection
 			dets_frame = get_frame_det(seq_dets, frame)
 			since = time.time()
-			results, affi = tracker.track(dets_frame, frame, seq_name)		
+
+			tracker.save_embeddings(dets_frame, frame, seq_name, video) ###########
+			results, affi = tracker.track(dets_frame, frame, seq_name, video)		###################
 			total_time += time.time() - since
 
 			# saving affinity matrix, between the past frame and current frame
@@ -91,6 +94,7 @@ def main_per_cat(cfg, cat, log, ID_start):
 
 			total_frames += 1
 		seq_count += 1
+		video += 1
 
 		for index in range(cfg.num_hypo): 
 			eval_file_dict[index].close()

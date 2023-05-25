@@ -2,6 +2,7 @@ import numpy as np, time
 from numba import jit
 from scipy.spatial import ConvexHull
 from AB3DMOT_libs.box import Box3D
+from sklearn.metrics.pairwise import cosine_similarity
 
 def polygon_clip(subjectPolygon, clipPolygon):
 	""" Clip a polygon with another polygon.
@@ -180,6 +181,15 @@ def dist3d_bottom(bbox1, bbox2):
 	c2 = Box3D.bbox2array(bbox2)[:3]
 	dist = np.linalg.norm(c1 - c2)
 
+	return dist
+
+def reID(bbox1, bbox2):
+	emb1 = bbox1.embedding
+	emb2 = bbox2.embedding
+	if (emb1 is None) or (emb2 is None):
+		dist = 0
+	else:
+		dist = cosine_similarity(emb1, emb2)
 	return dist
 
 def dist3d(bbox1, bbox2):

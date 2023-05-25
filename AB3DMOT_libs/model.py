@@ -2,6 +2,10 @@
 # email: xinshuo.weng@gmail.com
 
 import numpy as np, os, copy, math
+from PIL import Image
+import torch
+import xFormers
+import torchvision.transforms as T
 from AB3DMOT_libs.box import Box3D
 from AB3DMOT_libs.matching import data_association
 from AB3DMOT_libs.kalman_filter import KF
@@ -37,8 +41,16 @@ class AB3DMOT(object):
 		self.get_param(cfg, cat)
 		self.print_param()
 
+		# our contribution
+		#dinov2_vits14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+		#dinov2_vitb14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
+		#dinov2_vitl14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
+		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		self.dinov2 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+		self.dinov2.eval().to(self.device)
+
 		# debug
-		# self.debug_id = 2
+		#self.debug_id = 2
 		self.debug_id = None
 
 	def get_param(self, cfg, cat):
@@ -111,14 +123,14 @@ class AB3DMOT(object):
 		print_log('max age is %f' % self.max_age, log=self.log, display=False)
 		print_log('ego motion compensation is %d' % self.ego_com, log=self.log, display=False)
 
-	def process_dets(self, dets):
+	def process_dets(self, dets, embs):
 		# convert each detection into the class Box3D 
 		# inputs: 
 		# 	dets - a numpy array of detections in the format [[h,w,l,x,y,z,theta],...]
 
 		dets_new = []
-		for det in dets:
-			det_tmp = Box3D.array2bbox_raw(det)
+		for det, emb in zip(dets, embs):
+			det_tmp = Box3D.array2bbox_raw(det, emb)
 			dets_new.append(det_tmp)
 
 		return dets_new
@@ -242,8 +254,9 @@ class AB3DMOT(object):
 				trk.hits += 1
 
 				# update orientation in propagated tracks and detected boxes so that they are within 90 degree
-				bbox3d = Box3D.bbox2array(dets[d[0]])
+				bbox3d = Box3D.bbox2array(dets[d[0]]) ########
 				trk.kf.x[3], bbox3d[3] = self.orientation_correction(trk.kf.x[3], bbox3d[3])
+				trk.embedding = dets[d[0]].embedding #Add moving average here
 
 				if trk.id == self.debug_id:
 					print('After ego-compoensation')
@@ -275,9 +288,9 @@ class AB3DMOT(object):
 		# create and initialise new trackers for unmatched detections
 
 		# dets = copy.copy(dets)
-		new_id_list = list()					# new ID generated for unmatched detections
+		new_id_list = list()						# new ID generated for unmatched detections
 		for i in unmatched_dets:        			# a scalar of index
-			trk = KF(Box3D.bbox2array(dets[i]), info[i, :], self.ID_count[0])
+			trk = KF(Box3D.bbox2array(dets[i]), info[i, :], self.ID_count[0], dets[i].embedding)
 			self.trackers.append(trk)
 			new_id_list.append(trk.id)
 			# print('track ID %s has been initialized due to new detection' % trk.id)
@@ -402,13 +415,48 @@ class AB3DMOT(object):
 		# recall the last frames of outputs for computing ID correspondences during affinity processing
 		self.id_past_output = copy.copy(self.id_now_output)
 		self.id_past = [trk.id for trk in self.trackers]
+		
+		############################ OUR contribution ######################################################################
+		img_path = os.path.join(self.img_dir, f'{frame:06d}.png')
+		img = Image.open(img_path)
+
+		cropped_images = []
+		for dets_2d in info:
+			x1, y1, x2, y2 = dets_2d[:4]
+			# Convert the bounding box coordinates to integers
+			left = int(x1)
+			top = int(y1)
+			right = int(x2)
+			bottom = int(y2)
+			
+			# Crop the image
+			cropped_img = img.crop((left, top, right, bottom))
+			cropped_images.append(cropped_img)
+		
+		image_transforms = T.Compose([
+			T.Resize(224, interpolation = T.InterpolationMode.BILINEAR),
+    		T.ToTensor(),
+    		T.Normalize(mean=[0.5], std=[0.5]),
+		    T.CenterCrop(224),
+			])
+		
+		dets_embeddings = []
+		for i, cropped_img in enumerate(cropped_images):
+			im = image_transforms(cropped_img).unsqueeze(0).to(self.device)
+			print(f"Now embedding {i}")
+			with torch.no_grad():
+				embedding = self.dinov2(im).squeeze(0)
+			embedding = embedding.detach().numpy()
+			#embedding = np.random.random((384,))
+			dets_embeddings.append(embedding)
+		
+###############################################################################################################
 
 		# process detection format
-		dets = self.process_dets(dets)
-
+		dets = self.process_dets(dets, dets_embeddings)
 		# tracks propagation based on velocity
 		trks = self.prediction()
-
+		
 		# ego motion compensation, adapt to the current frame of camera coordinate
 		if (frame > 0) and (self.ego_com) and (self.oxts is not None):
 			trks = self.ego_motion_compensation(frame, trks)
@@ -435,7 +483,7 @@ class AB3DMOT(object):
 		# print_log(affi, log=self.log, display=False)
 
 		# update trks with matched detection measurement
-		self.update(matched, unmatched_trks, dets, info)
+		self.update(matched, unmatched_trks, dets, dets_embeddings, info)
 
 		# create and initialise new trackers for unmatched detections
 		new_id_list = self.birth(dets, info, unmatched_dets)
@@ -460,3 +508,60 @@ class AB3DMOT(object):
 			print_log('', log=self.log, display=False)
 
 		return results, affi
+
+	def save_embeddings(self, dets_all, frame, seq_name, video):
+		dets, info = dets_all['dets'], dets_all['info']         # dets: N x 7, float numpy array
+		if self.debug_id: print('\nframe is %s' % frame)
+		# logging
+		print_str = '\n\n*****************************************\n\n processing seq_name/frame %s/%d' % (seq_name, frame)
+		#print_log(print_str, log=self.log, display=False)
+		self.frame_count += 1
+
+		# recall the last frames of outputs for computing ID correspondences during affinity processing
+		self.id_past_output = copy.copy(self.id_now_output)
+		self.id_past = [trk.id for trk in self.trackers]
+
+		################## OUR contribution ############################################################################
+		img_path = os.path.join(self.img_dir, f'{frame:06d}.png')
+		img = Image.open(img_path)
+
+		def _save_embeddings(video_name, frame, embeddings):
+			folder_path = os.path.join("embeddings", str(video_name))
+			os.makedirs(folder_path, exist_ok=True)
+			file_path = os.path.join(folder_path, f"frame_{frame}.txt")
+			with open(file_path, 'a') as f:
+				for emb in embeddings:
+					emb_str = " ".join(map(str, emb))
+					f.write(emb_str + '\n')
+
+		cropped_images = []
+		for dets_2d in info:
+			x1, y1, x2, y2 = dets_2d[:4]
+			# Convert the bounding box coordinates to integers
+			left = int(x1)
+			top = int(y1)
+			right = int(x2)
+			bottom = int(y2)
+
+			# Crop the image
+			cropped_img = img.crop((left, top, right, bottom))
+			cropped_images.append(cropped_img)
+
+		image_transforms = T.Compose([
+			T.Resize(224, interpolation = T.InterpolationMode.BILINEAR),
+			T.CenterCrop(224),
+			T.ToTensor(),
+			T.Normalize(mean=[0.5], std=[0.5]),
+			])
+		
+		dets_embd = []
+		for i, cropped_img in enumerate(cropped_images):
+			# transform cropped img accordingly
+			im = image_transforms(cropped_img).unsqueeze(0).to(self.device)
+			with torch.no_grad():
+				embedding = self.dinov2(im).squeeze(0)
+			embedding = embedding.detach().numpy()
+			#embedding = np.random.random((384,))
+			
+			dets_embd.append(embedding)
+		_save_embeddings(video, frame, dets_embd)

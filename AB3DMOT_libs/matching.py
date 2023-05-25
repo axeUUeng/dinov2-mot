@@ -1,22 +1,31 @@
 import numpy as np
 from numba import jit
 from scipy.optimize import linear_sum_assignment
-from AB3DMOT_libs.dist_metrics import iou, dist3d, dist_ground, m_distance
+from AB3DMOT_libs.dist_metrics import iou, dist3d, dist_ground, m_distance, reid
 
 def compute_affinity(dets, trks, metric, trk_inv_inn_matrices=None):
-	# compute affinity matrix
+	'''
+	  compute affinity matrix
+	  	dets: a list of Box3D object
+		trks: a list of Box3D object
+		metric: distance metric for computing affinity matrix
+		trk_inv_inn_matrices: a list of inverse innovation covariance matrices for tracking
+
+	Returns affinity matrix
+	'''
 
 	aff_matrix = np.zeros((len(dets), len(trks)), dtype=np.float32)
 	for d, det in enumerate(dets):
 		for t, trk in enumerate(trks):
 
 			# choose to use different distance metrics
-			if 'iou' in metric:    	  dist_now = iou(det, trk, metric)            
-			elif metric == 'm_dis':   dist_now = -m_distance(det, trk, trk_inv_inn_matrices[t])
-			elif metric == 'euler':   dist_now = -m_distance(det, trk, None)
-			elif metric == 'dist_2d': dist_now = -dist_ground(det, trk)              	
-			elif metric == 'dist_3d': dist_now = -dist3d(det, trk)              				
+			if 'iou' in metric:    	  dist_now = iou(det, trk, metric) + reid(det, trk)      
+			elif metric == 'm_dis':   dist_now = -(m_distance(det, trk, trk_inv_inn_matrices[t]) + reid(det, trk))  
+			elif metric == 'euler':   dist_now = -(m_distance(det, trk, None) + reid(det, trk))
+			elif metric == 'dist_2d': dist_now = -(dist_ground(det, trk) + reid(det, trk)) 
+			elif metric == 'dist_3d': dist_now = -(dist3d(det, trk) + reid(det, trk)) 	
 			else: assert False, 'error'
+			
 			aff_matrix[d, t] = dist_now
 
 	return aff_matrix
