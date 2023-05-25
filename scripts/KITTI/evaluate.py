@@ -49,6 +49,7 @@ class tData:
         self.ignored    = False
         self.valid      = False
         self.tracker    = -1
+        self.embedding = None
 
     def __str__(self):
         """

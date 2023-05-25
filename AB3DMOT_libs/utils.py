@@ -12,6 +12,7 @@ from xinshuo_io import mkdir_if_missing, is_path_exists, fileparts, load_list_fr
 from xinshuo_miscellaneous import merge_listoflist
 
 def Config(filename):
+    print(filename)
     listfile1 = open(filename, 'r')
     listfile2 = open(filename, 'r')
     cfg = edict(yaml.safe_load(listfile1))

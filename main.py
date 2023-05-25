@@ -64,7 +64,10 @@ def main_per_cat(cfg, cat, log, ID_start):
 			dets_frame = get_frame_det(seq_dets, frame)
 			since = time.time()
 
-			tracker.save_embeddings(dets_frame, frame, seq_name, video) ###########
+			save_embedding_flag = True
+			if save_embedding_flag:
+				tracker.save_embeddings(dets_frame, frame, seq_name, video) ###########
+				continue
 			results, affi = tracker.track(dets_frame, frame, seq_name, video)		###################
 			total_time += time.time() - since
 
@@ -95,10 +98,10 @@ def main_per_cat(cfg, cat, log, ID_start):
 			total_frames += 1
 		seq_count += 1
 		video += 1
-
-		for index in range(cfg.num_hypo): 
-			eval_file_dict[index].close()
-			ID_start = max(ID_start, tracker.ID_count[index])
+		if not save_embedding_flag:
+			for index in range(cfg.num_hypo): 
+				eval_file_dict[index].close()
+				ID_start = max(ID_start, tracker.ID_count[index])
 
 	print_log('%s, %25s: %4.f seconds for %5d frames or %6.1f FPS, metric is %s = %.2f' % \
 		(cfg.dataset, result_sha, total_time, total_frames, total_frames / total_time, \
@@ -113,8 +116,8 @@ def main(args):
 	cfg, settings_show = Config(config_path)
 
 	# overwrite split and detection method
-	if args.split is not '': cfg.split = args.split
-	if args.det_name is not '': cfg.det_name = args.det_name
+	if args.split != '': cfg.split = args.split
+	if args.det_name != '': cfg.det_name = args.det_name
 
 	# print configs
 	time_str = get_timestring()

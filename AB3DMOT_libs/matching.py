@@ -1,7 +1,7 @@
 import numpy as np
 from numba import jit
 from scipy.optimize import linear_sum_assignment
-from AB3DMOT_libs.dist_metrics import iou, dist3d, dist_ground, m_distance, reid
+from AB3DMOT_libs.dist_metrics import iou, dist3d, dist_ground, m_distance, reID
 
 def compute_affinity(dets, trks, metric, trk_inv_inn_matrices=None):
 	'''
@@ -19,11 +19,11 @@ def compute_affinity(dets, trks, metric, trk_inv_inn_matrices=None):
 		for t, trk in enumerate(trks):
 
 			# choose to use different distance metrics
-			if 'iou' in metric:    	  dist_now = iou(det, trk, metric) + reid(det, trk)      
-			elif metric == 'm_dis':   dist_now = -(m_distance(det, trk, trk_inv_inn_matrices[t]) + reid(det, trk))  
-			elif metric == 'euler':   dist_now = -(m_distance(det, trk, None) + reid(det, trk))
-			elif metric == 'dist_2d': dist_now = -(dist_ground(det, trk) + reid(det, trk)) 
-			elif metric == 'dist_3d': dist_now = -(dist3d(det, trk) + reid(det, trk)) 	
+			if 'iou' in metric:    	  dist_now = iou(det, trk, metric) + reID(det, trk)      
+			elif metric == 'm_dis':   dist_now = -(m_distance(det, trk, trk_inv_inn_matrices[t]) + reID(det, trk))  
+			elif metric == 'euler':   dist_now = -(m_distance(det, trk, None) + reID(det, trk))
+			elif metric == 'dist_2d': dist_now = -(dist_ground(det, trk) + reID(det, trk)) 
+			elif metric == 'dist_3d': dist_now = -(dist3d(det, trk) + reID(det, trk)) 	
 			else: assert False, 'error'
 			
 			aff_matrix[d, t] = dist_now

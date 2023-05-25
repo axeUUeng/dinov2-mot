@@ -4,7 +4,7 @@
 import numpy as np, os, copy, math
 from PIL import Image
 import torch
-import xFormers
+#import xFormers
 import torchvision.transforms as T
 from AB3DMOT_libs.box import Box3D
 from AB3DMOT_libs.matching import data_association
@@ -46,9 +46,8 @@ class AB3DMOT(object):
 		#dinov2_vitb14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
 		#dinov2_vitl14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
 		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-		self.dinov2 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-		self.dinov2.eval().to(self.device)
-
+		self.dinov2 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14').to(self.device)
+		self.dinov2.eval()
 		# debug
 		#self.debug_id = 2
 		self.debug_id = None
@@ -417,38 +416,15 @@ class AB3DMOT(object):
 		self.id_past = [trk.id for trk in self.trackers]
 		
 		############################ OUR contribution ######################################################################
-		img_path = os.path.join(self.img_dir, f'{frame:06d}.png')
-		img = Image.open(img_path)
-
-		cropped_images = []
-		for dets_2d in info:
-			x1, y1, x2, y2 = dets_2d[:4]
-			# Convert the bounding box coordinates to integers
-			left = int(x1)
-			top = int(y1)
-			right = int(x2)
-			bottom = int(y2)
-			
-			# Crop the image
-			cropped_img = img.crop((left, top, right, bottom))
-			cropped_images.append(cropped_img)
-		
-		image_transforms = T.Compose([
-			T.Resize(224, interpolation = T.InterpolationMode.BILINEAR),
-    		T.ToTensor(),
-    		T.Normalize(mean=[0.5], std=[0.5]),
-		    T.CenterCrop(224),
-			])
-		
+		# Load saved embeddings
 		dets_embeddings = []
-		for i, cropped_img in enumerate(cropped_images):
-			im = image_transforms(cropped_img).unsqueeze(0).to(self.device)
-			print(f"Now embedding {i}")
-			with torch.no_grad():
-				embedding = self.dinov2(im).squeeze(0)
-			embedding = embedding.detach().numpy()
-			#embedding = np.random.random((384,))
-			dets_embeddings.append(embedding)
+		video_path = os.path.join("embeddings", str(video), f"frame_{frame}.txt")
+		with open(video_path, "r") as file:
+			rows = file.readlines()
+		for row in rows:
+			emb = row.strip().split()
+			numpy_embedding = np.array(emb, dtype=np.float32)
+			dets_embeddings.append(numpy_embedding)
 		
 ###############################################################################################################
 
