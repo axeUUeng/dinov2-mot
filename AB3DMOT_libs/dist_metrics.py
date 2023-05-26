@@ -186,10 +186,10 @@ def dist3d_bottom(bbox1, bbox2):
 def reID(bbox1, bbox2):
 	emb1 = bbox1.embedding
 	emb2 = bbox2.embedding
-	if (emb1 is None) or (emb2 is None):
+	if (emb2 is None):
 		dist = 0
 	else:
-		dist = cosine_similarity(emb1, emb2)
+		dist = cosine_similarity(emb1.reshape(1, -1), emb2.reshape(1, -1))[0][0]
 	return dist
 
 def dist3d(bbox1, bbox2):

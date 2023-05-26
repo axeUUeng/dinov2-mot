@@ -53,7 +53,8 @@ class KF(Filter):
 
 		# initialize data
 		self.kf.x[:7] = self.initial_pos.reshape((7, 1))
-		self.embedding = embedding
+		
+		self.kf.embedding = embedding
 
 	def compute_innovation_matrix(self):
 		""" compute the innovation matrix for association with mahalanobis distance

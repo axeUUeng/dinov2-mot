@@ -45,9 +45,12 @@ class AB3DMOT(object):
 		#dinov2_vits14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
 		#dinov2_vitb14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')
 		#dinov2_vitl14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
+
 		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-		self.dinov2 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14').to(self.device)
-		self.dinov2.eval()
+		print(f"ON DEVICE: {self.device} \n")
+		#self.dinov2 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14').to(self.device)
+		#self.dinov2.eval()
+
 		# debug
 		#self.debug_id = 2
 		self.debug_id = None
@@ -172,7 +175,6 @@ class AB3DMOT(object):
 			xyz = np.array([trk_tmp.x, trk_tmp.y, trk_tmp.z]).reshape((1, -1))
 			compensated = egomotion_compensation_ID(xyz, self.calib, ego_rot_imu, ego_xyz_imu, left, right)
 			trk_tmp.x, trk_tmp.y, trk_tmp.z = compensated[0]
-
 			# update compensated state in the Kalman filter
 			try:
 				self.trackers[index].kf.x[:3] = copy.copy(compensated).reshape((-1))
@@ -255,7 +257,10 @@ class AB3DMOT(object):
 				# update orientation in propagated tracks and detected boxes so that they are within 90 degree
 				bbox3d = Box3D.bbox2array(dets[d[0]]) ########
 				trk.kf.x[3], bbox3d[3] = self.orientation_correction(trk.kf.x[3], bbox3d[3])
-				trk.embedding = dets[d[0]].embedding #Add moving average here
+						
+				new_embedding = (trk.kf.embedding + dets[d[0]].embedding)/2
+				trk.kf.embedding = new_embedding
+					
 
 				if trk.id == self.debug_id:
 					print('After ego-compoensation')
@@ -391,7 +396,7 @@ class AB3DMOT(object):
 
 		return affi
 
-	def track(self, dets_all, frame, seq_name):
+	def track(self, dets_all, frame, seq_name, video):
 		"""
 		Params:
 		  	dets_all: dict
@@ -418,7 +423,7 @@ class AB3DMOT(object):
 		############################ OUR contribution ######################################################################
 		# Load saved embeddings
 		dets_embeddings = []
-		video_path = os.path.join("embeddings", str(video), f"frame_{frame}.txt")
+		video_path = os.path.join("embeddings_test_split", str(video), f"frame_{frame}.txt")
 		with open(video_path, "r") as file:
 			rows = file.readlines()
 		for row in rows:
@@ -436,6 +441,8 @@ class AB3DMOT(object):
 		# ego motion compensation, adapt to the current frame of camera coordinate
 		if (frame > 0) and (self.ego_com) and (self.oxts is not None):
 			trks = self.ego_motion_compensation(frame, trks)
+			for i, t in enumerate(trks):
+				t.embedding = self.trackers[i].kf.embedding
 
 		# visualization
 		if self.vis and (self.vis_dir is not None):
@@ -459,7 +466,7 @@ class AB3DMOT(object):
 		# print_log(affi, log=self.log, display=False)
 
 		# update trks with matched detection measurement
-		self.update(matched, unmatched_trks, dets, dets_embeddings, info)
+		self.update(matched, unmatched_trks, dets, info)
 
 		# create and initialise new trackers for unmatched detections
 		new_id_list = self.birth(dets, info, unmatched_dets)
@@ -493,16 +500,12 @@ class AB3DMOT(object):
 		#print_log(print_str, log=self.log, display=False)
 		self.frame_count += 1
 
-		# recall the last frames of outputs for computing ID correspondences during affinity processing
-		self.id_past_output = copy.copy(self.id_now_output)
-		self.id_past = [trk.id for trk in self.trackers]
-
 		################## OUR contribution ############################################################################
 		img_path = os.path.join(self.img_dir, f'{frame:06d}.png')
 		img = Image.open(img_path)
 
 		def _save_embeddings(video_name, frame, embeddings):
-			folder_path = os.path.join("embeddings", str(video_name))
+			folder_path = os.path.join("embeddings_val", str(video_name))
 			os.makedirs(folder_path, exist_ok=True)
 			file_path = os.path.join(folder_path, f"frame_{frame}.txt")
 			with open(file_path, 'a') as f:
@@ -512,7 +515,7 @@ class AB3DMOT(object):
 
 		cropped_images = []
 		for dets_2d in info:
-			x1, y1, x2, y2 = dets_2d[:4]
+			x1, y1, x2, y2 = dets_2d[2:6]
 			# Convert the bounding box coordinates to integers
 			left = int(x1)
 			top = int(y1)
@@ -524,7 +527,7 @@ class AB3DMOT(object):
 			cropped_images.append(cropped_img)
 
 		image_transforms = T.Compose([
-			T.Resize(224, interpolation = T.InterpolationMode.BILINEAR),
+			T.Resize(224, interpolation = T.InterpolationMode.BICUBIC),
 			T.CenterCrop(224),
 			T.ToTensor(),
 			T.Normalize(mean=[0.5], std=[0.5]),
@@ -533,11 +536,11 @@ class AB3DMOT(object):
 		dets_embd = []
 		for i, cropped_img in enumerate(cropped_images):
 			# transform cropped img accordingly
+			
 			im = image_transforms(cropped_img).unsqueeze(0).to(self.device)
+			
 			with torch.no_grad():
 				embedding = self.dinov2(im).squeeze(0)
-			embedding = embedding.detach().numpy()
-			#embedding = np.random.random((384,))
-			
+			embedding = embedding.detach().cpu().numpy()
 			dets_embd.append(embedding)
 		_save_embeddings(video, frame, dets_embd)

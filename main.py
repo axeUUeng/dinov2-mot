@@ -64,7 +64,7 @@ def main_per_cat(cfg, cat, log, ID_start):
 			dets_frame = get_frame_det(seq_dets, frame)
 			since = time.time()
 
-			save_embedding_flag = True
+			save_embedding_flag = False
 			if save_embedding_flag:
 				tracker.save_embeddings(dets_frame, frame, seq_name, video) ###########
 				continue
