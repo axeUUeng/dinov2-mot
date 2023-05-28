@@ -1,6 +1,9 @@
-# AB3DMOT
+#  {3DMulti-Object-Tracking}_gr{42}
+<! -- <b>3D Multi-Object Tracking: for DLAV CIVIL-459 by Johan Lagerby and Axel Englund
 
-<b>3D Multi-Object Tracking: A Baseline and New Evaluation Metrics (IROS 2020, ECCVW 2020)</b>
+<!-- # AB3DMOT
+
+<!-- <b>3D Multi-Object Tracking: A Baseline and New Evaluation Metrics (IROS 2020, ECCVW 2020)</b>
 
 This repository contains the official python implementation for our full paper at IROS 2020 "[3D Multi-Object Tracking: A Baseline and New Evaluation Metrics](http://www.xinshuoweng.com/papers/AB3DMOT/proceeding.pdf)" and short paper "[AB3DMOT: A Baseline for 3D Multi-Object Tracking and New Evaluation Metrics](http://www.xinshuoweng.com/papers/AB3DMOT_eccvw/camera_ready.pdf)" at ECCVW 2020. Our project website and video demos are [here](http://www.xinshuoweng.com/projects/AB3DMOT/). If you find our paper or code useful, please cite our papers:
 
@@ -71,4 +74,4 @@ We provide instructions (inference, evaluation and visualization) for reproducin
 
 ### Acknowledgement
 
-The idea of this method is inspired by "[SORT](https://github.com/abewley/sort)"
+The idea of this method is inspired by "[SORT](https://github.com/abewley/sort)" -->

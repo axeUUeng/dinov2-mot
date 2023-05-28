@@ -203,7 +203,6 @@ def dist3d(bbox1, bbox2):
 	c2 = np.average(corners2, axis=0)
 
 	dist = np.linalg.norm(c1 - c2)
-
 	return dist
 
 def diff_orientation_correction(diff):
@@ -221,7 +220,7 @@ def m_distance(det, trk, trk_inv_innovation_matrix=None):
     det_array = Box3D.bbox2array(det)[:7]
     trk_array = Box3D.bbox2array(trk)[:7] 		# (7, )
     diff = np.expand_dims(det_array - trk_array, axis=1) 	# 7 x 1
-
+    
     # correct orientation
     corrected_yaw_diff = diff_orientation_correction(diff[3])
     diff[3] = corrected_yaw_diff
